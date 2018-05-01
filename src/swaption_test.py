@@ -60,7 +60,7 @@ def run(x, total = 499000., compare=False, epochs=500, prefix='SWO GBP ',
                                  residual_cells=residual_cells,
                                  train_file=train_file,
                                  do_transform=do_transform,
-                                 activation="elu")
+                                 activation="elu")  # FK: TODO: change reduceLR etc to the right names
         model.train(epochs)
         if save:
             nn.write_model(model)

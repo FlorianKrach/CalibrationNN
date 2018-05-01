@@ -17,7 +17,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.externals import joblib
 
 data_dir = '../data/'
-h5file = data_dir + 'data.h5'
+data_dir_hp = data_dir+'hyperparameter_optimization_index_files/'  # FK: added by me
+h5file = data_dir + 'data.h5'  # FK: data1.h5 is the data from Hernandez, data.h5 was created by me while testing
 h5_ts_node = 'TS'
 swo_gbp_tskey = h5_ts_node + '/SWO/GBP'
 ois_gbp_tskey = h5_ts_node + '/IRC/GBP/OIS'
@@ -133,7 +134,7 @@ class TimeSeriesData(object):
         if len(args) > 0:
             dates = args[0]
         else:
-            dates = self._data.index.levels[0]
+            dates = self._data.index.levels[0]  # FK: this index has more levels, where in the first level there are the dates
         nbrDates = len(dates)
         mat = np.zeros((nbrDates,) + self._axis_shape)
         for iDate in range(nbrDates):
@@ -172,7 +173,7 @@ def plot_data(times, data, labels=None, figsize=(10, 7.5), frame_lines=False,
               xlabel_fontsize=14, ylabel_fontsize=14, 
               xtick_fontsize=14, ytick_fontsize=14,
               xtick_color=almost_black, ytick_color=almost_black,
-              out_of_sample=None, ytick_range=None, xtick_labels=None):
+              out_of_sample=None, ytick_range=None, xtick_labels=None, show=False):  # FK: added the bool show, whether to show the plot
     # Taken from 
     # http://www.randalolson.com/2014/06/28/how-to-make-beautiful-data-visualizations-in-python-with-matplotlib/
     # and
@@ -189,7 +190,9 @@ def plot_data(times, data, labels=None, figsize=(10, 7.5), frame_lines=False,
     assert len(times) == data.shape[0]    
     
     if colors is None:
-        if data.shape[1] <= 2:
+        if len(data.shape) == 1:  # FK: added by me, to make plotting in training data generation work
+            colors = '#ef8a62'
+        elif data.shape[1] <= 2:
             colors = ('#ef8a62', '#67a9cf')
         elif data.shape[1] <= 10:
             colors = tableau10mid
@@ -238,7 +241,7 @@ def plot_data(times, data, labels=None, figsize=(10, 7.5), frame_lines=False,
         
     #Set x ticks and limits
     if xmax is None or xmin is None:
-        if isinstance(times, np.ndarray) and times.dtype.type == np.datetime64:
+        if times.dtype.type == np.datetime64:  # FK: deleted: isinstance(times, np.ndarray) and
             locator = AutoDateLocator(minticks=min_x_ticks, maxticks=max_x_ticks,
                                       interval_multiples=interval_multiples)
             formatter = DateFormatter('%d-%m-%Y')        
@@ -286,7 +289,7 @@ def plot_data(times, data, labels=None, figsize=(10, 7.5), frame_lines=False,
     for y in ytick_range:
         plt.plot(xtick_range, [y] * len(xtick_range), "--", lw=0.5, color="black", alpha=0.3)
 
-    #   The following was only for a few graphs in the presentation
+    # The following was only for a few graphs in the presentation
     if out_of_sample is not None:
         xbreak = times[out_of_sample]
         ax.axvline(xbreak, lw=2.0, color="black", alpha=0.3)
@@ -300,15 +303,22 @@ def plot_data(times, data, labels=None, figsize=(10, 7.5), frame_lines=False,
                 horizontalalignment='right')
             
     # Remove the tick marks
-    plt.tick_params(axis="both", which="both", bottom="off", top="off",    
-                    labelbottom="on", left="off", right="off", labelleft="on") 
+    # plt.tick_params(axis="both", which="both", bottom="off", top="off",
+    #                 labelbottom="on", left="off", right="off", labelleft="on")  # FK: commented out by me
     
     #Plot the data
-    for i in range(data.shape[1]):
+    if len(data.shape) == 1:  # FK: added distinguishing the shape, to make plotting in training data generation work
         if labels is not None:
-            plt.plot(times, data[:, i], lw=2.5, color=colors[i%nb_colors], label=labels[i])
+            plt.plot(times, data, lw=1.5, color=colors, label=labels[0])
         else:
-            plt.plot(times, data[:, i], lw=2.5, color=colors[i%nb_colors])
+            plt.plot(times, data, lw=1.5, color=colors)
+
+    else:
+        for i in range(data.shape[1]):
+            if labels is not None:
+                plt.plot(times, data[:, i], lw=1.5, color=colors[i%nb_colors], label=labels[i])  # FK: changed lw=2.5 to lw=1.5
+            else:
+                plt.plot(times, data[:, i], lw=1.5, color=colors[i%nb_colors])  # FK: changed lw=2.5 to lw=1.5
     
     
     if labels is not None:
@@ -337,10 +347,12 @@ def plot_data(times, data, labels=None, figsize=(10, 7.5), frame_lines=False,
             ax.set_title(title, fontsize=title_fontsize)
         else:
             ax.set_title(title)
-        
 
     if save is not None:
-        plt.savefig(save, bbox_inches="tight")  
+        plt.savefig(save, bbox_inches="tight")
+
+    if show:
+        plt.show()
 
 
 def gbp_to_hdf5():
