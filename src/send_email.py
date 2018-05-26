@@ -8,8 +8,8 @@ from email.MIMEText import MIMEText
 from email.Utils import formatdate
 
 
-def send_email(mailadress='fkrach@student.ethz.ch', smtpserver='mail.ethz.ch', port=587, username='fkrach',
-               password='', to = 'florian.krach33@gmail.com',
+def send_email(mailadress='', smtpserver='', port=, username='',
+               password='', to = '',
                subject = 'python mail', body = "DONE"):
 
     From = mailadress
