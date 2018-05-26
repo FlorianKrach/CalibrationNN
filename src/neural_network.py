@@ -12,6 +12,8 @@ from functools import partial  # FK: this allows to partially full a function an
 from os.path import isfile
 from copy import deepcopy
 from joblib import Parallel, delayed
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.pipeline import Pipeline
 import dill
 import data_utils as du
 import instruments as inst
@@ -51,7 +53,8 @@ def flatten_name(name, node='Models', risk_factor='IR'):
 class NeuralNetwork(object):
     def __init__(self, model_dict, model_callback=None, preprocessing=None,
                  lr=0.001, loss='mean_squared_error', prefix='', postfix='',
-                 method=Nadam, train_file=None, batch_size=16, do_transform=True, **kwargs):
+                 method=Nadam, train_file=None, batch_size=16, do_transform=True, input_transform=False, **kwargs):
+        # FK: added input_transform, TODO: change things in code such that it works
         # self._model_dict = model_dict  # FK: deleted by me, since nowhere used and since it makes
         # problems when saving a g2_nn
         self.model_name = model_dict['name']
@@ -80,7 +83,13 @@ class NeuralNetwork(object):
             self.train_file_name = du.data_dir + self.train_file_name
 
         self.do_transform = do_transform
-        
+
+        # FK: added by me: input transformation
+        self.input_transform = input_transform
+        if input_transform:
+            funcTrm = inst.FunctionTransformerWithInverse(func=np.log, inv_func=np.exp)
+            self.input_transformer = Pipeline([('funcTrm', funcTrm), ('scaler', MinMaxScaler())])
+
         # Get training data if required
         if 'valid_size' in kwargs:
             self.valid_size = kwargs['valid_size']
@@ -205,8 +214,18 @@ class NeuralNetwork(object):
         # variable of the class, problem was: if hullwhite_fnn_model was called with nb_epochs=0 (as it is by default)
         # then self.history was empty, so there wasnt the 'batch_size' in 'params'
         history2 = self.model.fit(self.x_train, self.y_train, batch_size=self.batch_size,
-                          nb_epoch=nb_epochs, verbose=2, 
+                          epochs=nb_epochs, verbose=2,
                           validation_data=(self.x_valid, self.y_valid))
+        self.history = {'history': history2.history,
+                        'params': history2.params}
+
+    def fine_tune(self, nb_epochs, tune_data, batch_size=None):  # FK: added by me
+        if self.model is None:
+            raise RuntimeError('Model not yet instantiated')
+        if batch_size is None:
+            batch_size = self.batch_size
+        history2 = self.model.fit(np.concatenate((tune_data[0], tune_data[1]), axis=1), tune_data[2],
+                                  batch_size=batch_size, epochs=nb_epochs, verbose=2)
         self.history = {'history': history2.history,
                         'params': history2.params}
 
@@ -313,6 +332,7 @@ def hullwhite_fnn_model(data, method, loss, exponent=6, nb_epochs=0,
             act_idx = act_idx + 1
             ly = act(ly)
             ly = Dropout(dropout_middle)(ly)
+        ly = Dropout(dropout_last)(ly)  # FK: added by me, to make it as above
     ly = Dense(y_train.shape[1], kernel_initializer=init)(ly)
     nn = Model(inputs=inp, outputs=ly)
     nn.compile(method, loss=loss)

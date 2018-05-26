@@ -8,7 +8,7 @@ short)
 
 
 # import instruments as inst
-import data_utils as du
+# import data_utils as du
 import neural_network as nn
 import settings_NN as settings
 import send_email
@@ -43,17 +43,27 @@ elif settings.param_grid_name == 'grid_hw':
     grid_to_use = settings.param_grid_hw
 elif settings.param_grid_name == 'grid_test':
     grid_to_use = settings.param_grid_test
+elif settings.param_grid_name == 'grid3_g2':
+    grid_to_use = settings.param_grid3_g2
+elif settings.param_grid_name == 'grid4_g2':
+    grid_to_use = settings.param_grid4_g2
+elif settings.param_grid_name == 'grid5_g2':
+    grid_to_use = settings.param_grid5_g2
 
-parameters = list(ParameterGrid(grid_to_use))  # FK: this gives a list of dictionaries
-param = []
-nb_NN_totest = len(parameters)
-# print 'number of NN to be tested:', nb_NN_totest
-# print
+if type(grid_to_use) == dict:
+    parameters = list(ParameterGrid(grid_to_use))  # FK: this gives a list of dictionaries
+    param = []
+    nb_NN_totest = len(parameters)
+    print
+    print 'number of NN to be tested:', nb_NN_totest
 
+    for i, p in enumerate(parameters):
+        param += [[p['exp'], p['layer'], p['dof'], p['dom'], p['dol'], p['lr'], p['activation'], p['alpha'],
+                   p['residual_cells'], p['batch_size'], p['epochs'], p['train_file'], i]]
 
-for i, p in enumerate(parameters):
-    param += [[p['exp'], p['layer'], p['dof'], p['dom'], p['dol'], p['lr'], p['activation'], p['alpha'],
-               p['residual_cells'], p['batch_size'], p['epochs'], p['train_file'], i]]
+else:
+    param = grid_to_use
+    nb_NN_totest = len(param)
 
 
 # -----------------------------------------------
@@ -73,11 +83,13 @@ for i in range(nb_NN_totest):
 
 if settings.hp_reversed:
     missing_indices = list(reversed(missing_indices))
+    print
     print 'we do the testing with reversed indices'
     # print missing_indices
 
 if settings.hp_shuffle:
     np.random.shuffle(missing_indices)
+    print
     print 'we do the testing with shuffled indices:'
     print missing_indices
     print
@@ -117,13 +129,19 @@ if not os.path.isdir(settings.data_dir_hp):
 
 # -----------------------------------------------
 # test all different neural networks which haven't been tested yet:
-results_df = nn.test_fnn(nn.hullwhite_fnn, parameters=missing_param, nb_jobs=nb_jobs)  # nb_jobs=-1 means all CPUs are used
+if nb_NN_missing > 0:
+    results_df = nn.test_fnn(nn.hullwhite_fnn, parameters=missing_param, nb_jobs=nb_jobs)  # nb_jobs=-1 means all CPUs are used
 
 
 # -----------------------------------------------
 # concatenate new results with old ones (where process was interrupted) and then save them:
-results_df = pd.concat([df, results_df], ignore_index=True)
-results_df = results_df.sort_values(by=['test_loss'])  # sort the dataframe s.t. smallest loss on top
+if nb_NN_missing > 0:
+    results_df = pd.concat([df, results_df], ignore_index=True)
+    results_df = results_df.sort_values(by=['test_loss'])  # sort the dataframe s.t. smallest loss on top
+else:
+    results_df = df
+    results_df = results_df.sort_values(by=['test_loss'])  # sort the dataframe s.t. smallest loss on top
+
 
 if settings.hp_print_results:
     print
@@ -140,6 +158,8 @@ if settings.save_hp:
         except Exception as e:  # if file doesnt yet exist, simple create it with new results
             print e
             print 'New file is generated with the hyperparameter optimization data'
+        results_df[['layer', 'exponent', 'residual_cells', 'batch_size', 'epochs']] = results_df[
+            ['layer', 'exponent', 'residual_cells', 'batch_size', 'epochs']].astype('int')
         results_df.to_csv(path_or_buf=settings.hp_file)
     else:  # if we dont append the existing file, save to file with '_new' in the end, so that old file isnt overwritten
         results_df.to_csv(path_or_buf=settings.hp_file[:-4]+'_new.csv')

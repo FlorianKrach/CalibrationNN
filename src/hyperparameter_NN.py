@@ -13,7 +13,7 @@ from sklearn.model_selection import ParameterGrid
 import pandas as pd
 from subprocess import call
 import os
-import data_utils as du
+# import data_utils as du
 # import numpy as np
 # import multiprocessing as mp
 # import QuantLib as ql
@@ -43,18 +43,29 @@ elif settings.param_grid_name == 'grid_hw':
     grid_to_use = settings.param_grid_hw
 elif settings.param_grid_name == 'grid_test':
     grid_to_use = settings.param_grid_test
+elif settings.param_grid_name == 'grid3_g2':
+    grid_to_use = settings.param_grid3_g2
+elif settings.param_grid_name == 'grid4_g2':
+    grid_to_use = settings.param_grid4_g2
+elif settings.param_grid_name == 'grid5_g2':
+    grid_to_use = settings.param_grid5_g2
 
+if type(grid_to_use) == dict:
+    parameters = list(ParameterGrid(grid_to_use))  # FK: this gives a list of dictionaries
+    param = []
+    nb_NN_totest = len(parameters)
+    print
+    print 'number of NN to be tested:', nb_NN_totest
 
-parameters = list(ParameterGrid(grid_to_use))  # FK: this gives a list of dictionaries
-param = []
-nb_NN_totest = len(parameters)
-print
-print 'number of NN to be tested:', nb_NN_totest
+    for i, p in enumerate(parameters):
+        param += [[p['exp'], p['layer'], p['dof'], p['dom'], p['dol'], p['lr'], p['activation'], p['alpha'],
+                   p['residual_cells'], p['batch_size'], p['epochs'], p['train_file'], i]]
 
-
-for i, p in enumerate(parameters):
-    param += [[p['exp'], p['layer'], p['dof'], p['dom'], p['dol'], p['lr'], p['activation'], p['alpha'],
-               p['residual_cells'], p['batch_size'], p['epochs'], p['train_file'], i]]
+else:
+    param = grid_to_use
+    nb_NN_totest = len(param)
+    print
+    print 'number of NN to be tested:', nb_NN_totest
 
 # print param
 # for exp, layer, dof, dom, dol, lr, activation, alpha, residual_cells, batch_size, epochs, train_file, i in param:
@@ -69,7 +80,7 @@ print 'number of parallel jobs:', nb_jobs
 print
 
 # -----------------------------------------------
-# check whethter the directory settings.data_dir_hp exists, otherwise create it
+# check whether the directory settings.data_dir_hp exists, otherwise create it
 if not os.path.isdir(settings.data_dir_hp):
     print 'make new directory:', settings.data_dir_hp
     print
@@ -96,6 +107,8 @@ if settings.save_hp:
         except Exception as e:  # if file doesnt yet exist, simple create it with new results
             print e
             print 'New file is generated with the hyperparameter optimization data'
+        results_df[['layer', 'exponent', 'residual_cells', 'batch_size', 'epochs']] = results_df[
+            ['layer', 'exponent', 'residual_cells', 'batch_size', 'epochs']].astype('int')
         results_df.to_csv(path_or_buf=settings.hp_file)
     else:  # if we dont append the existing file, save to file with '_new' in the end, so that old file isnt overwritten
         results_df.to_csv(path_or_buf=settings.hp_file[:-4]+'_new.csv')

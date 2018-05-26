@@ -18,6 +18,44 @@ import time
 import settings_NN as settings
 from subprocess import call
 import os
+from joblib import Parallel, delayed
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.pipeline import Pipeline
+
+
+def error(swo):
+    nb_instruments = len(swo.helpers)  # the numbur of swaptions/instruments
+    volas_true = swo.values  # true volatilities of the day
+
+    # compute the NPVs and implied volas and errors for each instrument
+    NPV_total_error = 0
+    Vol_total_error = 0
+
+    for i in range(nb_instruments):
+        NPV_true = swo.helpers[i].marketValue()
+
+        try:
+            NPV_model = swo.helpers[i].modelValue()
+            NPV_error = NPV_true - NPV_model
+            NPV_total_error += abs(NPV_error**2)
+        except RuntimeError:
+            NPV_model = 0
+            NPV_error = NPV_true - NPV_model
+            NPV_total_error += abs(NPV_error**2)
+        try:
+            implVol = swo.helpers[i].impliedVolatility(NPV_model, 1.0e-6, 1000, 0.0001,
+                                                            2.50)  # or with: (NPV, 1.0e-4, 1000, 0.001, 1.80)
+            Vol_error = volas_true[i] - implVol
+            Vol_total_error += abs(Vol_error)
+        except RuntimeError:
+            implVol = 0
+            Vol_error = volas_true[i] - implVol
+            Vol_total_error += abs(Vol_error)
+
+    Vol_average_error = Vol_total_error / nb_instruments
+    NPV_average_error = NPV_total_error / nb_instruments
+
+    return NPV_average_error, Vol_average_error
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +109,8 @@ file_name = inst.sample_file_name(swo,size=nb_samples, with_error=with_error, hi
 # print
 # print 'sample 60: x_swo\n', x_swo[60, :].reshape(12,13)
 #
+
+# --------------------------------------------
 # # volatility surface plot:
 # fig = plt.figure()
 # ax = fig.add_subplot(111, projection='3d')
@@ -365,58 +405,58 @@ print
 # ---------------------------------------------------------------------------
 # # test network training with multiprocessing via Theano:
 
-# swo = inst.get_swaptiongen(inst.g2)
-#
-# nb_samples_total = 250000  # 100
-# nb_samples = 1000  # 10
-# with_error = True
-# history_part = 0.4
-# history_start = None
-# history_end = None
-# threshold = 0
-#
-# train_file = inst.sample_file_name(swo,size=nb_samples_total, with_error=with_error, history_part=history_part,
-#                                   history_end=history_end, history_start=history_start)
-#
-# compare = False
-# epochs = 4
-# prefix = ''
-# postfix = '_s'+str(nb_samples_total)+'_'+str(history_part)
-# dropout_first = None
-# dropout_middle = None
-# dropout_last = None
-# dropout = 0.2
-# earlyStopPatience = 125
-# reduceLRPatience = 40
-# reduceLRFactor = 0.5
-# reduceLRMinLR = 0.000009
-# save = True
-# layers = 4
-# lr = 0.001
-# exponent = 6
-# load = False
-# model_dict = inst.g2
-# residual_cells = 1
-# train_file = train_file
-# do_transform = True
-# loss = 'mean_squared_error'
-#
-#
-# net = nn.hullwhite_fnn(exponent=exponent, layers=layers, lr=lr,
-#                                  prefix=prefix, postfix=postfix,
-#                                  dropout=dropout,
-#                                  dropout_first=dropout_first,
-#                                  dropout_middle=dropout_middle,
-#                                  dropout_last=dropout_last,
-#                                  earlyStopPatience=earlyStopPatience,
-#                                  reduceLRPatience=reduceLRPatience,
-#                                  reduceLRFactor=reduceLRFactor,
-#                                  reduceLRMinLR=reduceLRMinLR,
-#                                  model_dict=model_dict,
-#                                  residual_cells=residual_cells,
-#                                  train_file=train_file,
-#                                  do_transform=do_transform,
-#                                  activation="elu")
+swo = inst.get_swaptiongen(inst.g2)
+
+nb_samples_total = 250000  # 100
+nb_samples = 1000  # 10
+with_error = True
+history_part = 0.4
+history_start = None
+history_end = None
+threshold = 0
+
+train_file = inst.sample_file_name(swo,size=nb_samples_total, with_error=with_error, history_part=history_part,
+                                  history_end=history_end, history_start=history_start)
+
+compare = False
+epochs = 4
+prefix = ''
+postfix = '_s'+str(nb_samples_total)+'_'+str(history_part)
+dropout_first = None
+dropout_middle = None
+dropout_last = None
+dropout = 0.2
+earlyStopPatience = 125
+reduceLRPatience = 40
+reduceLRFactor = 0.5
+reduceLRMinLR = 0.000009
+save = True
+layers = 4
+lr = 0.001
+exponent = 6
+load = False
+model_dict = inst.g2
+residual_cells = 1
+train_file = train_file
+do_transform = True
+loss = 'mean_squared_error'
+
+
+net = nn.hullwhite_fnn(exponent=exponent, layers=layers, lr=lr,
+                                 prefix=prefix, postfix=postfix,
+                                 dropout=dropout,
+                                 dropout_first=dropout_first,
+                                 dropout_middle=dropout_middle,
+                                 dropout_last=dropout_last,
+                                 earlyStopPatience=earlyStopPatience,
+                                 reduceLRPatience=reduceLRPatience,
+                                 reduceLRFactor=reduceLRFactor,
+                                 reduceLRMinLR=reduceLRMinLR,
+                                 model_dict=model_dict,
+                                 residual_cells=residual_cells,
+                                 train_file=train_file,
+                                 do_transform=do_transform,
+                                 activation="elu")
 
 # file_name = net.file_name()
 #
@@ -490,5 +530,77 @@ print df
 # for file in os.listdir(du.data_dir_hp):
 #     print file
 #     call(['rm', du.data_dir_hp+file])
+
+
+# ------------------------------------------
+# testing for plot_performance:
+# print
+# print np.load(settings.error_filename)
+
+# start = int(settings.history_part * len(settings.dates))
+# end = start + 43
+# print swo._dates[start], swo._dates[end]
+
+
+# ------------------------------------------
+# dummy joblib example
+#
+# def dummy_func(index, start_time):
+#     time1 = int(time.time() - start_time)
+#     time.sleep(2)
+#     time2 = int(time.time() - start_time)
+#     return index, time1, time2
+#
+# start_time = time.time()
+# results = Parallel(n_jobs=1)(delayed(dummy_func)(i, start_time) for i in range(10))
+#
+# print results
+
+
+# ------------------------------------------
+# # try to find out whether models are calibrated to fit volas or npv
+# swo = inst.get_swaptiongen(inst.hullwhite_analytic)
+# dates = swo._dates
+# swo.set_date(dates[0])
+# print
+# print 'before calibration:', swo.model.params()
+# swo.model.calibrate(swo.helpers, swo.method, swo.end_criteria, swo.constraint)
+# vol_params = swo.model.params()
+# print 'calibrate with VolErrorType:', vol_params
+# error1 = error(swo)
+#
+# swo1 = inst.SwaptionGen(index=ql.GBPLibor(ql.Period(6, ql.Months)), model_dict=inst.hullwhite_analytic,
+#                         error_type=ql.CalibrationHelper.PriceError)
+# swo1.set_date(dates[0])
+# swo1.model.calibrate(swo1.helpers, swo1.method, swo1.end_criteria, swo1.constraint)
+# rel_price_params = swo1.model.params()
+# print 'calibrated with RelativePriceError:', rel_price_params
+# error2 = error(swo1)
+# print
+# print 'errors:                             NPV mean squared error, absolute volatility error'
+# print 'calibrate with VolErrorType:       ', error1
+# print 'calibrated with RelativePriceError:', error2
+'''result: hernandez uses an optimization method that minimizes to volatility error, not the npv error'''
+
+#
+# print dir(swo.helpers[0])
+# print swo.helpers[0].swaptionStrike()
+# print swo.helpers[0].swaptionNominal()
+
+
+# ------------------------------------------
+# # test for new pipeline for neural net input
+funcTrm = inst.FunctionTransformerWithInverse(func=np.log, inv_func=np.exp)
+input_transformer = Pipeline([('funcTrm', funcTrm), ('scaler', MinMaxScaler())])
+
+x = range(1,10)
+x = np.asarray(x)
+x = np.array([x,2*x])
+print x
+input_transformer.fit(x.transpose())
+x = input_transformer.transform(x.transpose())
+print x
+x = input_transformer.inverse_transform(x)
+print x
 
 

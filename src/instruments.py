@@ -353,6 +353,7 @@ class SwaptionGen (du.TimeSeriesData):
         x_ir = self._ircurve.to_matrix(dates)
 
         # modified by FK:
+        # print(x_ir.shape)
         # print(dates)
         # print(y)
         # print(swo_error)
@@ -370,14 +371,19 @@ class SwaptionGen (du.TimeSeriesData):
             # print(row)
             # print(y.iloc[row,:].tolist())
             self.model.setParams(y.iloc[row,:].tolist())  # FK: modified
-            for swaption in range(nb_instruments):
-                try:
-                    NPV = self.helpers[swaption].modelValue()  # FK: price of the swaption/instument according to model
-                    vola = self.helpers[swaption].impliedVolatility(NPV, 1.0e-6, 1000, 0.0001, 2.50)  # FK: black volatility implied by the model
-                    # print(swo_error)
-                    x_swo[row, swaption] = np.clip(vola - swo_error.iloc[row, swaption], 0., np.inf)  # FK: vola-error gives the true market volatility, would be easier to take this directly with the _data (see test)
-                except RuntimeError as e:
-                    print('Exception (%s) for (sample, maturity, length): (%s, %s, %s)' % (e, row, self._maturities[swaption], self._lengths[swaption]))
+            # # FK: change the following to directly taking the volas:
+            # for swaption in range(nb_instruments):
+            #     try:
+            #         NPV = self.helpers[swaption].modelValue()  # FK: price of the swaption/instument according to model
+            #         vola = self.helpers[swaption].impliedVolatility(NPV, 1.0e-6, 1000, 0.0001, 2.50)  # FK: black volatility implied by the model
+            #         # print(swo_error)
+            #         x_swo[row, swaption] = np.clip(vola - swo_error.iloc[row, swaption], 0., np.inf)  # FK: vola-error gives the true market volatility, would be easier to take this directly with the _data (see test)
+            #         # FK: following added by me:
+            #         print(x_swo[row, swaption])
+            #         print(self.values[swaption])
+            #     except RuntimeError as e:
+            #         print('Exception (%s) for (sample, maturity, length): (%s, %s, %s)' % (e, row, self._maturities[swaption], self._lengths[swaption]))
+            x_swo[row, :] = self.values
 
         if 'save' in kwargs and kwargs['save']:            
             if 'append' in kwargs and kwargs['append']:
@@ -1100,10 +1106,12 @@ def retrieve_swo_train_set(file_name, transform=True, func=None, inv_func=None,
         else:
             pipeline = scaler
 
+        # print(y_train)  # FK: added by me
         y_train = pipeline.fit_transform(y_train)  # FK: pipeline is normally used as statistical tool, to fit a model
         # and then transform the data (e.g. lin regression) here our fitting doesnt do anything and we only apply the
         # transformations (see http://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html), we
         # need to fit, since we use the scaler which has to be fitted to the data first
+        # print(y_train)  # FK: added by me
         if y_valid is not None:
             y_valid = pipeline.transform(y_valid)
         if y_test is not None:
